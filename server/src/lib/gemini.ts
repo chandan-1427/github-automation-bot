@@ -23,7 +23,7 @@ Title: ${title}
 Body: ${body.slice(0, 2000)}`;
 
   const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${env.geminiApiKey}`,
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent?key=${env.geminiApiKey}`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
