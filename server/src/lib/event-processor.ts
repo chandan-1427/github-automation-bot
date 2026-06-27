@@ -151,6 +151,17 @@ export async function processEvent(eventRowId: number) {
 
     const installationGithubId = await getInstallationGithubId(repoRow.installationId);
 
+    // Each user can set their own Slack webhook URL in their dashboard
+    // settings, so notifications go to their own channel rather than
+    // the deployment-wide default. sendSlackMessage falls back to the
+    // env var if this is null.
+    const [ownerUser] = await db
+      .select({ slackWebhookUrl: schema.users.slackWebhookUrl })
+      .from(schema.users)
+      .where(eq(schema.users.id, repoRow.ownerUserId))
+      .limit(1);
+    const slackWebhookUrl = ownerUser?.slackWebhookUrl ?? null;
+
     // Optional AI triage — runs once per event, independent of rules,
     // so the dashboard always shows it for opened issues/PRs even if
     // no rule happens to match.
@@ -211,7 +222,7 @@ export async function processEvent(eventRowId: number) {
 
       if (actions.slackAlert) {
         const text = `:robot_face: *${rule.name}* matched on \`${normalized.owner}/${normalized.repo}\`\n*${normalized.title}* by ${normalized.author}`;
-        await runAction(eventRowId, rule.id, "slack_alert", "slack", () => sendSlackMessage(text));
+        await runAction(eventRowId, rule.id, "slack_alert", "slack", () => sendSlackMessage(text, slackWebhookUrl));
       }
     }
 

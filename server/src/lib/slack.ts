@@ -1,19 +1,21 @@
 import { env } from "./env.js";
 
 /**
- * Sends a message to Slack via an Incoming Webhook URL. This is the
- * simplest free Slack integration — no bot token, no OAuth, just a
- * per-channel URL generated from the Slack App config. If no webhook
- * URL is configured we no-op (lets the rest of the app run without
- * Slack set up yet, e.g. during local dev).
+ * Sends a message to Slack via an Incoming Webhook URL. Accepts an
+ * optional per-user webhook URL (set in their dashboard settings) so
+ * each user's automation posts to their own Slack channel rather than
+ * a single deployment-wide one. Falls back to the env-var default if
+ * the user hasn't configured their own — useful for a quick demo/test
+ * setup, but real multi-tenant use should rely on the per-user value.
  */
-export async function sendSlackMessage(text: string): Promise<void> {
-  if (!env.slackWebhookUrl) {
-    console.log("[slack] SLACK_WEBHOOK_URL not set, skipping notification:", text);
+export async function sendSlackMessage(text: string, webhookUrlOverride?: string | null): Promise<void> {
+  const url = webhookUrlOverride || env.slackWebhookUrl;
+  if (!url) {
+    console.log("[slack] no webhook URL configured (user or env), skipping notification:", text);
     return;
   }
 
-  const res = await fetch(env.slackWebhookUrl, {
+  const res = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ text }),

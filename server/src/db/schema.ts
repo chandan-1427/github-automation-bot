@@ -22,6 +22,7 @@ export const users = pgTable("users", {
   login: text("login").notNull(),
   name: text("name"),
   avatarUrl: text("avatar_url"),
+  slackWebhookUrl: text("slack_webhook_url"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 }, (t) => ({
   githubIdIdx: uniqueIndex("users_github_id_idx").on(t.githubId),

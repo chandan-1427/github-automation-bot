@@ -110,4 +110,7 @@ export const api = {
   updateRule: (id: number, rule: Partial<Rule>) =>
     request<{ rule: Rule }>(`/rules/${id}`, { method: "PATCH", body: JSON.stringify(rule) }),
   deleteRule: (id: number) => request<{ ok: true }>(`/rules/${id}`, { method: "DELETE" }),
+  getSettings: () => request<{ slackWebhookUrl: string | null }>("/settings"),
+  updateSettings: (slackWebhookUrl: string | null) =>
+    request<{ ok: true }>("/settings", { method: "PATCH", body: JSON.stringify({ slackWebhookUrl }) }),
 };

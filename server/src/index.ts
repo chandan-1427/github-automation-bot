@@ -8,6 +8,7 @@ import { installRoutes } from "./routes/install.js";
 import { webhookRoutes } from "./routes/webhooks.js";
 import { dashboardRoutes } from "./routes/dashboard.js";
 import { rulesRoutes } from "./routes/rules.js";
+import { settingsRoutes } from "./routes/settings.js";
 
 const app = new Hono();
 
@@ -43,6 +44,7 @@ app.route("/", installRoutes);
 app.route("/", webhookRoutes);
 app.route("/", dashboardRoutes);
 app.route("/", rulesRoutes);
+app.route("/", settingsRoutes);
 
 app.notFound((c) => c.json({ error: "not found" }, 404));
 app.onError((err, c) => {

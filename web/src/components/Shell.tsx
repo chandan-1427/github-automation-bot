@@ -39,6 +39,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
             {navItem("/dashboard", "Activity")}
             {navItem("/rules", "Rules")}
             {navItem("/repos", "Repositories")}
+            {navItem("/settings", "Settings")}
           </nav>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>

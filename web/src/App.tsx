@@ -4,6 +4,7 @@ import LoginPage from "./pages/LoginPage";
 import DashboardPage from "./pages/DashboardPage";
 import RulesPage from "./pages/RulesPage";
 import ReposPage from "./pages/ReposPage";
+import SettingsPage from "./pages/SettingsPage";
 import Shell from "./components/Shell";
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -46,6 +47,14 @@ export default function App() {
             element={
               <ProtectedRoute>
                 <ReposPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/settings"
+            element={
+              <ProtectedRoute>
+                <SettingsPage />
               </ProtectedRoute>
             }
           />
