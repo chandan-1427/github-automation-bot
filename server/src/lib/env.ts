@@ -44,4 +44,8 @@ export const env = {
 
   geminiApiKey: optional("GEMINI_API_KEY", ""),
   aiEnabled: optional("GEMINI_API_KEY", "") !== "",
+  // Model names get deprecated/shut down periodically (e.g. the entire
+  // Gemini 1.5 family was shut down). Keeping this as an env var means
+  // a model swap is a Render dashboard change, not a code deploy.
+  geminiModel: optional("GEMINI_MODEL", "gemini-3.1-flash-lite"),
 };
