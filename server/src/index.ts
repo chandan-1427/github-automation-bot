@@ -1,3 +1,4 @@
+import "./lib/fetch-config.js"; // must be first: configures global fetch dispatcher before anything else calls fetch
 import { serve } from "@hono/node-server";
 import { Hono } from "hono";
 import { cors } from "hono/cors";

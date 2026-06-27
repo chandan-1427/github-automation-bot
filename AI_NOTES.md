@@ -80,6 +80,46 @@ underlying lesson generalizes: any time two integrations both produce
 something called "an id," name the variables after which system the id
 belongs to, not after the generic concept.
 
+## A second one, found during live deployment testing
+
+After deploying to Render, "Sign in with GitHub" failed with a redirect
+to `/login?error=oauth_failed` and a 401 in the browser console. The
+server logs showed only:
+
+```
+[auth] OAuth callback failed: ErrorEvent { type: 'error', defaultPrevented: false, cancelable: false, timeStamp: ... }
+```
+
+No status code, no message — `fetch()` had failed before getting any
+HTTP response at all, and Node's built-in fetch (undici) wraps
+connection-level failures in a generic `ErrorEvent` instead of a normal
+`Error` with a useful message. My first catch block just logged the
+bare error object, so the real cause was invisible.
+
+This turned out to be a known class of issue: undici's default connect
+timeout (10s) can be too tight in some containerized hosting
+environments, where the TCP/TLS handshake to an external host takes
+longer than on a typical dev machine — the request aborts before a
+response ever comes back, with no distinguishing detail in the error
+that bubbles up. It's not specific to this code or to GitHub's API; it
+shows up across many unrelated Node + container-host combinations.
+
+Fix was two-part: (1) set a global undici dispatcher with a 30s connect
+timeout at the very top of `index.ts`, before any other module can call
+`fetch`, and (2) actually log `err.cause` / `err.message` instead of
+the bare error object, so if this recurs (or any other outbound call
+fails the same way) the logs say something useful instead of an opaque
+`ErrorEvent`. I also wrapped the OAuth fetch calls in the same
+`withRetry` helper everything else already used — they'd been missed
+in the original pass, which was itself a small inconsistency with the
+project's own stated convention in `AGENTS.md`.
+
+The instructive part: a low-detail error on a "this should just work"
+network call is reason to improve the logging *before* trying more
+fixes, not after. Guessing at causes from a content-free stack trace
+wastes more time than the 5 minutes it takes to make the error
+message say something real.
+
 ## What I'd improve with more time
 
 - **Automated tests.** There's no test suite. Given the 72-hour window
