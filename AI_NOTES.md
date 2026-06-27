@@ -46,6 +46,20 @@ secure / does this actually satisfy the brief" review came from me.
    explicitly — the first draft of similar systems I've seen tend to
    reach for an in-memory Set first because it's simpler to write.
 
+4. **Built real per-user Slack routing instead of leaving it as a
+   documented limitation.** Once the app was actually deployed and
+   working, I noticed every user's alerts would go to *my* Slack
+   channel, not their own, since the only Slack config was a single
+   deployment-wide env var. I was given the option to just document
+   this as a known gap (reasonable for a 72-hour exercise) but chose to
+   actually fix it — added a per-user `slackWebhookUrl` column and a
+   settings page, with the env var kept only as a fallback default.
+   This was a deliberate call that a single-tenant shortcut wouldn't
+   hold up under "would a reviewer testing with their own repo get
+   confusingly routed to someone else's Slack" — worth the extra ~20
+   minutes given the brief specifically grades the integration's
+   reliability for an arbitrary user, not just for me.
+
 ## The hardest bug / wrong turn
 
 The trickiest part was the relationship between three different
@@ -85,10 +99,7 @@ belongs to, not after the generic concept.
 After deploying to Render, "Sign in with GitHub" failed with a redirect
 to `/login?error=oauth_failed` and a 401 in the browser console. The
 server logs showed only:
-
-```
-[auth] OAuth callback failed: ErrorEvent { type: 'error', defaultPrevented: false, cancelable: false, timeStamp: ... }
-```
+`[auth] OAuth callback failed: ErrorEvent { type: 'error', defaultPrevented: false, cancelable: false, timeStamp: ... }`
 
 No status code, no message — `fetch()` had failed before getting any
 HTTP response at all, and Node's built-in fetch (undici) wraps
@@ -120,16 +131,111 @@ fixes, not after. Guessing at causes from a content-free stack trace
 wastes more time than the 5 minutes it takes to make the error
 message say something real.
 
+## A third one: SameSite cookies and the split-deployment architecture
+
+After fixing the database driver, sign-in completed (the OAuth callback
+returned a clean 302 instead of erroring), but the dashboard
+immediately showed "not authenticated" — `GET /auth/me` came back 401
+right after a successful login redirect.
+
+The cause: the frontend (Vercel) and API (Render) are intentionally on
+different domains — that split was one of the architecture decisions
+documented above. But it has a real consequence for cookies that
+doesn't show up in local dev, where both run on `localhost` and are
+same-site by definition. The session cookie was set with
+`SameSite=Lax`, which is the safer default and correctly survives a
+top-level browser redirect (GitHub → our `/auth/github/callback`) — but
+`Lax` cookies are *not* attached to `fetch()` calls across origins,
+only to top-level navigations. So the cookie landed fine during the
+OAuth redirect, then got silently withheld on the very next request
+(the dashboard's `fetch('/auth/me')`), making a successful login look
+identical to a failed one from the frontend's perspective.
+
+Fixed by using `SameSite=None` (which requires `Secure`, fine since
+both deploys are HTTPS) specifically for the session cookie, while
+leaving the short-lived OAuth state cookie on `Lax` since it never
+needs to survive a `fetch()` call, only the one redirect.
+
+This is the same underlying lesson as the other two bugs in this
+file: **local dev same-origin/same-network setups hide a class of bugs
+that only appear once you actually deploy across two real domains.**
+None of these three issues (undici timeout, Neon-specific driver,
+SameSite cookies) would have been caught by `tsc` or even by running
+both halves locally against each other — they're all specifically
+about what changes when the boundary between client and server
+becomes a real network and a real cross-origin browser security model,
+rather than `localhost` talking to `localhost`.
+
+## More bugs found during the actual end-to-end test pass
+
+The three bugs above were all "can a user sign in at all." Once that
+worked, testing the actual product features (rules, GitHub App
+permissions, AI triage) surfaced a different category of problem —
+not code bugs, but **gaps between what I assumed a fresh setup would
+look like and what GitHub actually does.**
+
+**Wrong Postgres driver for the actual database provider.** My first
+deploy used Neon's `@neondatabase/serverless` package, which connects
+over Neon's proprietary WebSocket proxy — it doesn't work against any
+other Postgres provider. The database ended up being provisioned on
+Supabase, not Neon, so every connection failed at the WebSocket
+handshake stage with the same opaque `ErrorEvent` pattern as the OAuth
+bug, but from a completely different root cause (driver incompatibility,
+not a timeout). Fixed by switching to the standard `pg` driver
+(`drizzle-orm/node-postgres`), which works with any Postgres host. The
+lesson: don't bake in a provider-specific driver when the README offers
+a choice of providers — pick the lowest-common-denominator driver
+unless there's a specific reason to need the proprietary one.
+
+**GitHub App permission changes don't apply to existing installations.**
+After adding the Contents permission (needed to subscribe to `push`
+events) to the already-installed GitHub App, push events still weren't
+arriving — confirmed via GitHub's own "Recent Deliveries" log showing
+zero `push.*` entries despite multiple real pushes. GitHub doesn't
+retroactively apply new permissions to installations that predate the
+change; the installing user has to explicitly review and accept the
+new permission set, and that prompt isn't always obviously surfaced.
+Uninstalling and reinstalling fresh picked up the current permission
+set immediately and fixed it. Worth knowing for anyone iterating on a
+GitHub App's permissions after the first install during development.
+
+**A rule's "Applies to" checkboxes have to be deliberately set per
+event type — easy to forget when adding a new one.** A test pull
+request matched on title correctly but didn't fire any actions, with
+zero action chips in the dashboard (not even a failed one) — which was
+itself the useful diagnostic signal: zero chips means the rule didn't
+match at all, as opposed to matching and then failing partway through.
+The actual cause was mundane: the rule's `eventTypes` only had `issues`
+checked, not `pull_request`, from when it was first created — adding a
+new event type to test later doesn't retroactively update existing
+rules. Not a code bug, but a real usability gap worth knowing about:
+the UI doesn't warn "you added pull_request support but your existing
+rules don't apply to it yet."
+
+**Gemini model deprecation.** AI triage failed with a 404 — every
+Gemini 1.5 model (`gemini-1.5-flash`, the one I'd hardcoded) had been
+shut down server-side. This is exactly the kind of fact that goes stale
+fast and that I, as a model with a training cutoff, can get wrong with
+full confidence — I had to actually search for the current model name
+(`gemini-3.1-flash-lite`) rather than trust what I "knew." Fixed two
+ways: swapped the model name, and then moved it into a `GEMINI_MODEL`
+env var with that as the default, so the next deprecation cycle is a
+Render dashboard edit, not a redeploy. Decided to do the env var
+version myself rather than just take the one-line fix, since "AI
+provider renames/retires a model" is a recurring maintenance cost, not
+a one-time fluke.
+
 ## What I'd improve with more time
 
 - **Automated tests.** There's no test suite. Given the 72-hour window
   and that this was built in a chat-based environment without a real
   CI loop, I prioritized making the manual "does it actually work
-  end-to-end" path solid (verified via real `tsc`/`vite build` passes
-  and a hand-traced webhook flow) over writing unit tests for the rules
-  engine — which is the one piece I'd test first, since `ruleMatches`
-  and `renderTemplate` are pure functions with no I/O and would be fast
-  to cover.
+  end-to-end" path solid (verified via real `tsc`/`vite build` passes,
+  hand-traced webhook logic, and then a real live test pass covering
+  all three event types, label writes, Slack, and AI triage) over
+  writing unit tests for the rules engine — which is the one piece I'd
+  test first, since `ruleMatches` and `renderTemplate` are pure
+  functions with no I/O and would be fast to cover.
 - **Websockets instead of polling for the dashboard.** It currently
   polls every 8 seconds, which is simple and reliable but not
   instantaneous.
@@ -143,6 +249,12 @@ message say something real.
 - **Structured log shipping.** Logs go to stdout (visible in Render's
   log viewer) but aren't shipped anywhere queryable; for a real
   on-call setup I'd want them in something searchable.
+- **A nudge when a rule's event types don't cover something new.** Now
+  that I've personally hit the "added pull_request support, forgot my
+  existing rule didn't apply to it yet" gap above, a small UI hint —
+  e.g. "this rule only applies to: issues" shown more prominently, or
+  a one-click "apply to all subscribed event types" — would have saved
+  a full debugging round trip.
 
 ## A note on how I worked with the model
 
