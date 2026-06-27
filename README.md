@@ -21,7 +21,7 @@ To see the bot react:
 3. Within a few seconds: the issue/PR gets the `bot-triaged` label, a
    Slack alert fires, and the event appears in the dashboard's
    **Activity** tab with an AI-generated summary.
-   
+
 ## How it's built
 
 - `server/` — Node + TypeScript + [Hono](https://hono.dev), Postgres via
@@ -51,6 +51,22 @@ ever installing the App; you just won't have anything to automate yet.
 ## Local setup
 
 Requires Node 20+.
+
+**A note before you start:** GitHub will not accept `localhost` anywhere
+— not as the OAuth App's callback URL, not as the GitHub App's Setup
+URL, and not as the webhook URL. All three must be real, publicly
+reachable HTTPS URLs. In practice this means either:
+- deploy first (Render + Vercel, both free, see "Deployment" below),
+  then come back and finish the GitHub-side setup using those real
+  URLs, or
+- use a tunnel (`ngrok http 8080`) to get a temporary public URL for
+  local testing, and update the GitHub-side settings again once you
+  deploy for real.
+
+If you paste a `localhost` URL into any of these GitHub fields, you'll
+see an error like *"Webhook URL is not supported because it isn't
+reachable over the public Internet (localhost)"* — that's GitHub
+validating the field immediately, not a bug in this app.
 
 ### 1. Database
 
