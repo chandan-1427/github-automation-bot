@@ -78,7 +78,7 @@ authRoutes.get("/auth/github/callback", async (c) => {
     setCookie(c, SESSION_COOKIE_NAME, sessionId, {
       httpOnly: true,
       secure: env.nodeEnv === "production",
-      sameSite: "Lax",
+      sameSite: env.nodeEnv === "production" ? "None" : "Lax",
       maxAge: SESSION_TTL_MS / 1000,
       path: "/",
     });
