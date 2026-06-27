@@ -5,9 +5,23 @@ Sign in with GitHub, connect a repository, and define rules like
 Slack." The bot listens for GitHub webhooks, runs your rules, writes
 back to GitHub, and shows a live activity log in a dashboard.
 
-**Live app:** _fill in your Vercel URL here_
-**API:** _fill in your Render URL here_
+**Live app:** https://github-automation-bot-two.vercel.app
+**API:** https://github-automation-bot-eudt.onrender.com
 
+## Try it live
+
+A demo repo is connected and ready to test:
+**[chandan-1427/image-converter](https://github.com/chandan-1427/image-converter)**
+
+To see the bot react:
+1. Sign in at the live app URL above with your GitHub account, or just
+   view the dashboard if already signed in.
+2. Open a new issue or pull request on the demo repo with **"test"**
+   somewhere in the title (this matches the configured rule).
+3. Within a few seconds: the issue/PR gets the `bot-triaged` label, a
+   Slack alert fires, and the event appears in the dashboard's
+   **Activity** tab with an AI-generated summary.
+   
 ## How it's built
 
 - `server/` — Node + TypeScript + [Hono](https://hono.dev), Postgres via
