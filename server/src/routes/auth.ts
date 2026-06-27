@@ -85,7 +85,14 @@ authRoutes.get("/auth/github/callback", async (c) => {
 
     return c.redirect(`${env.webOrigin}/dashboard`);
   } catch (err) {
-    console.error("[auth] OAuth callback failed:", err);
+    const anyErr = err as any;
+    console.error("[auth] OAuth callback failed:", {
+      message: anyErr?.message,
+      name: anyErr?.name,
+      cause: anyErr?.cause,
+      error: anyErr?.error,
+      stack: anyErr?.stack,
+    });
     return c.redirect(`${env.webOrigin}/login?error=oauth_failed`);
   }
 });
