@@ -102,7 +102,11 @@ export const api = {
   disableRepo: (githubRepoId: number) =>
     request<{ ok: true }>(`/install/repos/${githubRepoId}/disable`, { method: "POST" }),
 
-  events: (limit = 50) => request<{ events: EventRow[] }>(`/dashboard/events?limit=${limit}`),
+  events: (limit = 50, eventTypes: string[] = []) => {
+    const params = new URLSearchParams({ limit: String(limit) });
+    if (eventTypes.length > 0) params.set("eventType", eventTypes.join(","));
+    return request<{ events: EventRow[] }>(`/dashboard/events?${params.toString()}`);
+  },
 
   rules: () => request<{ rules: Rule[] }>("/rules"),
   createRule: (rule: Partial<Rule>) =>

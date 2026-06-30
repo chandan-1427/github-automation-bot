@@ -11,6 +11,12 @@ const STATUS_PILL_CLASS: Record<string, string> = {
   retrying: "pill-pending",
 };
 
+const EVENT_TYPE_OPTIONS = [
+  { label: "Issues", value: "issues" },
+  { label: "Pull Requests", value: "pull_request" },
+  { label: "Push", value: "push" },
+];
+
 function formatRelativeTime(iso: string): string {
   const diffMs = Date.now() - new Date(iso).getTime();
   const sec = Math.floor(diffMs / 1000);
@@ -25,10 +31,11 @@ function formatRelativeTime(iso: string): string {
 export default function DashboardPage() {
   const [events, setEvents] = useState<EventRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [selectedTypes, setSelectedTypes] = useState<string[]>([]);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (types: string[]) => {
     try {
-      const { events } = await api.events(50);
+      const { events } = await api.events(50, types);
       setEvents(events);
       setError(null);
     } catch (err) {
@@ -37,19 +44,60 @@ export default function DashboardPage() {
     }
   }, []);
 
+  // Re-fetch immediately when filter changes, then restart the poll
+  // interval so it also uses the new filter going forward.
   useEffect(() => {
-    load();
-    // Poll rather than websockets — simplest reliable way to get a
-    // "live" feel for a log viewer without adding a socket server.
-    const interval = setInterval(load, 8000);
+    load(selectedTypes);
+    const interval = setInterval(() => load(selectedTypes), 8000);
     return () => clearInterval(interval);
-  }, [load]);
+  }, [load, selectedTypes]);
+
+  function toggleType(value: string) {
+    setSelectedTypes((prev) =>
+      prev.includes(value) ? prev.filter((t) => t !== value) : [...prev, value]
+    );
+  }
+
+  function clearFilter() {
+    setSelectedTypes([]);
+  }
 
   return (
     <div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 16 }}>
         <h2 style={{ fontFamily: "var(--font-mono)", fontSize: 16, margin: 0 }}>Activity</h2>
         <span className="text-dim" style={{ fontSize: 12 }}>refreshes every 8s</span>
+      </div>
+
+      {/* Filter bar */}
+      <div style={{ display: "flex", gap: 8, marginBottom: 16, alignItems: "center", flexWrap: "wrap" }}>
+        {EVENT_TYPE_OPTIONS.map((opt) => {
+          const active = selectedTypes.includes(opt.value);
+          return (
+            <button
+              key={opt.value}
+              className="btn btn-sm"
+              onClick={() => toggleType(opt.value)}
+              style={{
+                borderColor: active ? "var(--accent)" : "var(--border)",
+                color: active ? "var(--accent)" : "var(--text-dim)",
+                background: active ? "rgba(63,185,80,0.08)" : "transparent",
+                transition: "all 0.15s ease",
+              }}
+            >
+              {opt.label}
+            </button>
+          );
+        })}
+        {selectedTypes.length > 0 && (
+          <button
+            className="btn btn-sm"
+            onClick={clearFilter}
+            style={{ color: "var(--text-dim)", borderColor: "var(--border)" }}
+          >
+            Clear
+          </button>
+        )}
       </div>
 
       {error && (
@@ -63,10 +111,11 @@ export default function DashboardPage() {
           <p className="text-dim">Loading…</p>
         ) : events.length === 0 ? (
           <div className="empty-state">
-            <h3>No events yet</h3>
+            <h3>{selectedTypes.length > 0 ? "No matching events" : "No events yet"}</h3>
             <p>
-              Once you connect a repository and something happens there — an
-              issue opens, a PR is filed — it'll show up here.
+              {selectedTypes.length > 0
+                ? `No ${selectedTypes.join(" or ")} events found. Try a different filter or clear it.`
+                : "Once you connect a repository and something happens there — an issue opens, a PR is filed — it'll show up here."}
             </p>
           </div>
         ) : (
@@ -94,7 +143,7 @@ export default function DashboardPage() {
               {e.actions.length > 0 && (
                 <div className="action-list">
                   {e.actions.map((a) => (
-                    <span key={a.id} className={`action-chip ${a.status === "failed" ? "" : ""}`}>
+                    <span key={a.id} className="action-chip">
                       <span
                         style={{
                           color:
